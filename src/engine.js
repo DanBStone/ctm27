@@ -117,6 +117,9 @@ const Engine = (() => {
       dismissedFlags: {}, // { [runId]: true }
       reviews: [],
       lastBackup: null,
+      lastImport: null,
+      installDismissed: false,
+      race: { resultSec: null },
     };
   }
   function migrate(s) {
@@ -131,6 +134,7 @@ const Engine = (() => {
       weekModes: s.weekModes || {},
       dismissedFlags: s.dismissedFlags || {},
       reviews: Array.isArray(s.reviews) ? s.reviews : [],
+      race: s.race || { resultSec: null },
     };
   }
 
@@ -207,13 +211,13 @@ const Engine = (() => {
 
   function applyRebuild(days, wk, targetKm, label) {
     const w = weekDays(days, wk);
-    const runDays = w.filter((d) => d.orig.km > 0 && d.type !== "Test" && d.type !== "Race");
+    const runDays = w.filter((d) => d.orig.km > 0 && !["Test", "Race", "Carb load"].includes(d.type));
     const sun = w.find((d) => d.day === "Sun");
     const sunKm = Math.min(14, Math.round(targetKm * 0.3));
     const others = runDays.filter((d) => d.day !== "Sun");
     const each = others.length ? Math.max(4, Math.round((targetKm - sunKm) / others.length)) : 0;
     for (const d of others) setDay(d, `Easy ${each} km${d.day === "Thu" ? " + strides" : ""}`, each, "Easy", "Easy", label);
-    if (sun && sun.type !== "Test" && sun.type !== "Race") setDay(sun, `${sunKm} km easy`, sunKm, "Easy", "Easy", label);
+    if (sun && !["Test", "Race", "Carb load"].includes(sun.type)) setDay(sun, `${sunKm} km easy`, sunKm, "Easy", "Easy", label);
   }
 
   /* ---------- runs & metrics ---------- */
@@ -367,8 +371,8 @@ const Engine = (() => {
           applyRepeat(days, resumeWk, Math.max(1, resumeWk - 1), 0.8, `Back from ${gap.len} days off: week ${Math.max(1, resumeWk - 1)} repeated at 80%`);
           gapApplied = true;
         }
-        alerts.push({ level: "action", rule: "gap", title: `${gap.len} days without a logged run`,
-          body: `Week ${resumeWk} becomes a repeat of week ${Math.max(1, resumeWk - 1)} at 80% volume. The plan rejoins as written next week; the race date and peak week don't move.` });
+        alerts.push({ level: "adjust", rule: "gap", title: "Welcome back",
+          body: `After ${gap.len} days off, week ${resumeWk} repeats week ${Math.max(1, resumeWk - 1)} at 80% so you ease back in. Next week the plan carries on as written; the race date and peak week don't move.` });
       } else {
         const refKm = sumKm(weekDays(days, preWk).map((d) => ({ km: d.orig.km })));
         const target = Math.max(25, Math.round(refKm * 0.6));
@@ -377,8 +381,8 @@ const Engine = (() => {
           applyRepeat(days, resumeWk + 1, preWk, 0.8, `Rebuild week 2: week ${preWk} at 80%`);
           if (resumeWk + 1 === curWk) gapApplied = true;
         }
-        alerts.push({ level: "action", rule: "gap", title: `${gap.len} days without a logged run`,
-          body: `Week ${resumeWk} is an easy rebuild at about ${target} km (60% of where you were), then week ${resumeWk + 1} repeats week ${preWk} at 80%. If you were injured, get cleared before you start.` });
+        alerts.push({ level: "adjust", rule: "gap", title: "Easing you back in",
+          body: `After ${gap.len} days off, week ${resumeWk} is an easy rebuild at about ${target} km, then week ${resumeWk + 1} repeats week ${preWk} at 80%. The race date and peak week don't move. If you were injured, get cleared before you start.` });
       }
     }
 
@@ -406,8 +410,8 @@ const Engine = (() => {
             }
           }
           catchupApplied = true;
-          alerts.push({ level: "warn", rule: "catchup", title: `Last week: ${prevActual} of ${prevPlanned} km`,
-            body: `This week is capped at about ${cap} km (+15% on what you actually ran) instead of ${curPlanned} km. Sessions stay; easy runs and the long run shrink. Don't try to make up the missed volume.` });
+          alerts.push({ level: "adjust", rule: "catchup", title: "Adjusted after a lighter week",
+            body: `You ran ${prevActual} of ${prevPlanned} km last week, so this week builds from there: about ${cap} km instead of ${curPlanned}. Sessions stay; easy runs and the long run are shorter. No need to make up the missed kilometres.` });
         }
       }
     }
@@ -423,11 +427,11 @@ const Engine = (() => {
           d.desc = d.desc.replace(/\b\d+(\.\d+)?\s*km\b/, `${km} km`);
           d.km = km; d.adjusted = true;
         }
-        alerts.push({ level: "warn", rule: "load", title: `Load ratio ${load.ratio.toFixed(2)}`,
-          body: `Your last 7 days (${load.km7} km) are well above your 4-week average (${load.chronic} km/week). ${flex.length ? "Remaining easy runs this week are cut by 20%." : "Keep the rest of this week as adjusted."} Above about 1.3, injury risk climbs.` });
+        alerts.push({ level: "adjust", rule: "load", title: "Volume jumped this week",
+          body: `${load.km7} km in the last 7 days against a 4-week average of ${load.chronic} km (ratio ${load.ratio.toFixed(2)}). ${flex.length ? "The rest of this week's easy runs are 20% shorter to keep the jump safe." : "Keep the rest of this week as adjusted."}` });
       } else if (load.ratio < 0.7 && load.km28 > 0 && !gap) {
-        alerts.push({ level: "info", rule: "load", title: `Load ratio ${load.ratio.toFixed(2)}`,
-          body: `You're running well under your recent average. Fine for a down week; otherwise get back to the plan rather than adding extra.` });
+        alerts.push({ level: "info", rule: "load", title: "Lighter than usual",
+          body: `${load.km7} km in the last 7 days against a 4-week average of ${load.chronic} km. Fine for a down week; otherwise just pick the plan back up rather than adding extra.` });
       }
     }
 
@@ -458,7 +462,7 @@ const Engine = (() => {
         body: `${flags.length} warning signs in the last 7 days. ${next ? `${next.day} ${next.date.slice(5)}'s session is swapped for an easy run.` : "Keep the next few days easy."} Sleep, eat to target, and check resting HR.`,
         flags: flags.map((f) => ({ id: f.run.id, date: f.run.date, why: f.why })) });
     } else if (flags.length === 1) {
-      alerts.push({ level: "info", rule: "readiness", title: "One warning sign this week",
+      alerts.push({ level: "info", rule: "readiness", title: "One fatigue sign this week",
         body: `${flags[0].why} on ${flags[0].run.date.slice(5)}. One more in the next few days and the next session gets swapped.`,
         flags: flags.map((f) => ({ id: f.run.id, date: f.run.date, why: f.why })) });
     }
@@ -540,6 +544,46 @@ const Engine = (() => {
     return { runs: [...map.values()].sort((a, b) => (a.date + (a.time || "") < b.date + (b.time || "") ? 1 : -1)), added, updated };
   }
 
+
+  /* ---------- discoveries: bests found in your own log ---------- */
+  const MON3 = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const monthYear = (iso) => { const d = fromISO(iso); return `${MON3[d.getMonth()]} ${d.getFullYear()}`; };
+  function mondayOf(iso) { const d = fromISO(iso); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return toISO(d); }
+  const isRoad = (r) => !r.trail && r.km < 45; // ultras and trail runs don't count as road bests
+  const before = (r, run) => r.id !== run.id && (r.date < run.date || (r.date === run.date && (r.time || "") < (run.time || "")));
+
+  function runDiscoveries(runs, run) {
+    const out = [];
+    if (!isRoad(run)) return out;
+    const prior = runs.filter((r) => before(r, run) && isRoad(r));
+    if (prior.length < 10) return out;
+    if (run.km >= 15) {
+      const best = prior.reduce((a, r) => (r.km > a.km ? r : a), prior[0]);
+      if (run.km > best.km + 0.05) out.push(`Longest road run in your log. Your previous longest was ${round1(best.km)} km in ${monthYear(best.date)}.`);
+    }
+    for (const [label, lo, hi] of [["5 km", 4.9, 5.4], ["10 km", 9.8, 10.7], ["half marathon", 20.9, 21.7]]) {
+      if (run.km < lo || run.km > hi) continue;
+      const same = prior.filter((r) => r.km >= lo && r.km <= hi && r.sec);
+      if (same.length < 2) continue;
+      const best = same.reduce((a, r) => (r.sec / r.km < a.sec / a.km ? r : a), same[0]);
+      if (run.sec / run.km < best.sec / best.km) out.push(`Fastest ${label} in your log. Your previous best was ${fmtDuration(best.sec)} in ${monthYear(best.date)}.`);
+    }
+    return out;
+  }
+
+  function weekDiscovery(runs, mondayISO) {
+    const totals = {};
+    for (const r of runs) { const k = mondayOf(r.date); totals[k] = (totals[k] || 0) + (r.km || 0); }
+    const mine = totals[mondayISO] || 0;
+    const prior = Object.keys(totals).filter((k) => k < mondayISO).sort();
+    if (prior.length < 8 || mine <= 0) return null;
+    const bigger = prior.filter((k) => totals[k] >= mine);
+    if (!bigger.length) return `Biggest week in your log: ${round1(mine)} km.`;
+    const last = bigger[bigger.length - 1];
+    if (diffDays(last, mondayISO) < 42) return null;
+    return `Biggest week since ${monthYear(last)} (${round1(totals[last])} km).`;
+  }
+
   /* ---------- review payload ---------- */
   function reviewPayload(seed, state, today) {
     const { days, alerts, load } = adjust(seed, state, today);
@@ -563,6 +607,7 @@ const Engine = (() => {
     defaultState, migrate, weekOf, basePlan, adjust, paceModel, zones, targetFor, nutritionFor,
     loadRatio, effSeries, efficiency, qualifiesForEff, paceAt150, kmBetween, runsByDate,
     importGarminCSV, mergeRuns, parseCSV, reviewPayload, findGap,
+    runDiscoveries, weekDiscovery, mondayOf, monthYear,
   };
 })();
 if (typeof module !== "undefined") module.exports = Engine;

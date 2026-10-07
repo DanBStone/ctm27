@@ -13,10 +13,10 @@ Vercel or Netlify work the same way: point them at the repo, no build step.
 
 ## First run
 
-1. **Log → Choose Activities CSV.** Export it from Garmin Connect on the web (Activities → All Activities → scroll to load the period → Export CSV). Import your full history once; afterwards import every week or two. Re-imports update runs instead of duplicating them.
-2. **Log → effort (RPE).** Garmin doesn't export effort, so set RPE on key runs in the runs list. The fatigue check uses it.
-3. **Setup → Checkpoint results.** Enter each test (5 km on 7 Nov, 10 km on 17 Jan, half on ~21 Mar). The latest result resets every pace.
-4. **Setup → Export backup** once a week. Your data lives only in this browser.
+1. **Runs → Import Garmin CSV.** Export it from Garmin Connect on the web (Activities → All Activities → scroll to load the period → Export CSV). Import your full history once; afterwards import every week or two. Re-imports update runs instead of duplicating them.
+2. **The + button** logs a run by hand. After each run you get a summary card; tap how hard it felt (1–10). The fatigue check uses it.
+3. **Progress → Benchmarks.** Enter each test (5 km on 7 Nov, 10 km on 17 Jan, half on ~21 Mar). The latest result resets every pace.
+4. **Settings (top-right icon) → Export backup** once a week. Your data lives only in this browser.
 
 ## What the engine does
 
@@ -32,11 +32,11 @@ Vercel or Netlify work the same way: point them at the repo, no build step.
 | Holiday mode | You switch it on for a week (Plan tab) | 4 runs, at least 35 km, Tuesday session and a long run kept. |
 | Crunch mode | You switch it on for a week | 4-day template, capped at 65 km. |
 
-The race date, checkpoints and peak week never move. Daily carb and protein targets, long-run fuelling and the race-day gel plan (Maurten, two CAF 100 gels at 20 and 30 km, about 3 mg/kg caffeine) are on the Today and Setup tabs.
+The race date, checkpoints and peak week never move. Daily carb and protein targets are on Today; long-run fuelling and the race-day gel plan (Maurten, two CAF 100 gels at 20 and 30 km, about 3 mg/kg caffeine) are under Plan → Race day and Plan → Fuel.
 
 ## Optional: weekly review with Claude
 
-Setup → add your Anthropic API key and press **Write this week's review**. It sends the last 14 days, the next 7 days and the engine's adjustments, and costs a few cents. The key is stored only in that browser, so only enter it on your own device.
+Settings → add your Anthropic API key and press **Write this week's review**. It sends the last 14 days, the next 7 days and the engine's adjustments, and costs a few cents. The key is stored only in that browser, so only enter it on your own device.
 
 ## Changing the app
 
@@ -44,10 +44,11 @@ The deployable app is the single file `index.html`. Its sources are in `src/`:
 
 - `engine.js`: all rules and calculations (pure functions, runs in Node).
 - `ui.js`: screens and input handling.
-- `shell.html`: markup and styles.
+- `shell.html`: markup and styles (colour tokens are at the top of the `<style>` block).
+- `fonts.css`: Big Shoulders Display Light (headlines) and Instrument Sans (everything else), embedded so the app works offline.
 - `seed.json`: the 32-week plan (224 days).
 
-Edit those, then run `python3 src/assemble.py` to rebuild `index.html`. Test the engine with `node src/test_src.js path/to/Activities.csv`.
+Edit those, then run `py src/assemble.py` (or `python3`) to rebuild `index.html`. Test the engine with `node src/test_src.js path/to/Activities.csv`.
 
 To preview any date, add `?today=2027-02-14` to the URL. It doesn't change your data.
 

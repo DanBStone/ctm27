@@ -1,5 +1,5 @@
 // Offline support: the app works without a connection after the first visit.
-const CACHE = "ctm27-v1";
+const CACHE = "ctm27-v5";
 const ASSETS = ["./", "index.html", "manifest.webmanifest", "icon.svg", "icon-192.png", "icon-512.png"];
 
 self.addEventListener("install", (e) => {
